@@ -16,10 +16,14 @@
 
 package com.example.android.wifidirect;
 
+import android.annotation.SuppressLint;
 import android.app.Fragment;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.net.wifi.WpsInfo;
 import android.net.wifi.p2p.WifiP2pConfig;
@@ -28,6 +32,10 @@ import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager.ConnectionInfoListener;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Message;
 import android.support.v4.content.FileProvider;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -37,13 +45,24 @@ import android.widget.TextView;
 
 import com.example.android.wifidirect.DeviceListFragment.DeviceActionListener;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+
+import static android.content.Context.LOCATION_SERVICE;
 
 /**
  * A fragment that manages a particular peer and allows interaction with device
@@ -55,7 +74,15 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
     private View mContentView = null;
     private WifiP2pDevice device;
     private WifiP2pInfo info;
+    private Handler serverHandler;
+    private Handler clientHandler;
     ProgressDialog progressDialog = null;
+
+    private static final long LOCATION_REFRESH_TIME = 1000;
+    private static final float LOCATION_REFRESH_DISTANCE = 0.5f;
+
+    private int counterReceivedMessages = 0;
+
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
@@ -85,7 +112,7 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
 //                                ((DeviceActionListener) getActivity()).cancelDisconnect();
 //                            }
 //                        }
-                        );
+                );
                 ((DeviceActionListener) getActivity()).connect(config);
 
             }
@@ -113,6 +140,14 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
                     }
                 });
 
+        mContentView.findViewById(R.id.btn_client_send_message).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Message message = createTextMessage(STATE_SEND_MESSAGE, "Hello world!");
+                clientHandler.sendMessage(message);
+            }
+        });
+
         return mContentView;
     }
 
@@ -134,6 +169,7 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
         getActivity().startService(serviceIntent);
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     public void onConnectionInfoAvailable(final WifiP2pInfo info) {
         if (progressDialog != null && progressDialog.isShowing()) {
@@ -146,7 +182,7 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
         TextView view = (TextView) mContentView.findViewById(R.id.group_owner);
         view.setText(getResources().getString(R.string.group_owner_text)
                 + ((info.isGroupOwner == true) ? getResources().getString(R.string.yes)
-                        : getResources().getString(R.string.no)));
+                : getResources().getString(R.string.no)));
 
         // InetAddress from WifiP2pInfo struct.
         view = (TextView) mContentView.findViewById(R.id.device_info);
@@ -156,14 +192,70 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
         // server. The file server is single threaded, single connection server
         // socket.
         if (info.groupFormed && info.isGroupOwner) {
-            new FileServerAsyncTask(getActivity(), mContentView.findViewById(R.id.status_text))
-                    .execute();
+//            new FileServerAsyncTask(getActivity(), mContentView.findViewById(R.id.status_text))
+//                    .execute();
+            serverHandler = new Handler(Looper.getMainLooper()) {
+                @Override
+                public void handleMessage(Message msg) {
+                    switch (msg.what) {
+                        case STATE_RECEIVED_MESSAGE:
+                            Log.d("test", "Received message on main thread: " + readStringFromMessage(msg));
+                            ((TextView) mContentView.findViewById(R.id.txt_server_received_messages)).setText("Received messages: " + counterReceivedMessages++);
+                            break;
+
+                        case STATE_CLIENT_CONNECTED:
+                            Log.d("test", "Client connected");
+                            ((TextView) mContentView.findViewById(R.id.txt_server_client_connected)).setVisibility(View.VISIBLE);
+                            break;
+
+                        case STATE_CLIENT_DISCONNECTED:
+                            Log.d("test", "Client disconnected");
+                            ((TextView) mContentView.findViewById(R.id.txt_server_client_connected)).setVisibility(View.GONE);
+                            break;
+                    }
+                }
+            };
+
+            new Thread(new ServerTask()).start();
+
+            mContentView.findViewById(R.id.txt_server_received_messages).setVisibility(View.VISIBLE);
         } else if (info.groupFormed) {
-            // The other device acts as the client. In this case, we enable the
-            // get file button.
-            mContentView.findViewById(R.id.btn_start_client).setVisibility(View.VISIBLE);
-            ((TextView) mContentView.findViewById(R.id.status_text)).setText(getResources()
-                    .getString(R.string.client_text));
+
+            HandlerThread handlerThread = new HandlerThread("serverHandler-thread");
+            handlerThread.start();
+
+            ClientWorker clientWorker = new ClientWorker(info.groupOwnerAddress);
+            clientHandler = new Handler(handlerThread.getLooper(), clientWorker);
+            clientHandler.sendEmptyMessage(STATE_OPEN_SOCKET);
+
+            LocationManager locationManager = (LocationManager) getContext().getSystemService(LOCATION_SERVICE);
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, LOCATION_REFRESH_TIME, LOCATION_REFRESH_DISTANCE, new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {
+                    String str = String.format("%d;%d", location.getLongitude(), location.getLatitude());
+                    Message message = createTextMessage(STATE_SEND_MESSAGE, str);
+
+                    clientHandler.sendMessage(message);
+                    Log.d("Test", "Location update " + str);
+                }
+
+                @Override
+                public void onStatusChanged(String s, int i, Bundle bundle) {
+
+                }
+
+                @Override
+                public void onProviderEnabled(String s) {
+
+                }
+
+                @Override
+                public void onProviderDisabled(String s) {
+
+                }
+            });
+
+            mContentView.findViewById(R.id.btn_client_send_message).setVisibility(View.VISIBLE);
         }
 
         // hide the connect button
@@ -172,7 +264,7 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
 
     /**
      * Updates the UI with device data
-     * 
+     *
      * @param device the device to be displayed
      */
     public void showDetails(WifiP2pDevice device) {
@@ -229,7 +321,7 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
                 Log.d(WiFiDirectActivity.TAG, "Server: connection done");
                 final File f = new File(context.getExternalFilesDir("received"),
                         "wifip2pshared-" + System.currentTimeMillis()
-                        + ".jpg");
+                                + ".jpg");
 
                 File dirs = new File(f.getParent());
                 if (!dirs.exists())
@@ -258,9 +350,9 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
 
                 File recvFile = new File(result);
                 Uri fileUri = FileProvider.getUriForFile(
-                                context,
-                                "com.example.android.wifidirect.fileprovider",
-                                recvFile);
+                        context,
+                        "com.example.android.wifidirect.fileprovider",
+                        recvFile);
                 Intent intent = new Intent();
                 intent.setAction(android.content.Intent.ACTION_VIEW);
                 intent.setDataAndType(fileUri, "image/*");
@@ -298,4 +390,154 @@ public class DeviceDetailFragment extends Fragment implements ConnectionInfoList
         return true;
     }
 
+
+    private static final int PORT_SERVER = 7077;
+    private static final int STATE_RECEIVED_MESSAGE = 1010;
+    private static final int STATE_CLIENT_CONNECTED = 2000;
+    private static final int STATE_CLIENT_DISCONNECTED = 2001;
+
+    private static final int STATE_OPEN_SOCKET = 1112;
+    private static final int STATE_SEND_MESSAGE = 1111;
+
+
+    public class ServerTask implements Runnable {
+        @Override
+        public void run() {
+            ServerSocket serverSocket = null;
+            try {
+                serverSocket = new ServerSocket(PORT_SERVER);
+                serverSocket.setSoTimeout(10000);
+
+                while (true) {
+                    final Socket client = serverSocket.accept();
+                    client.setKeepAlive(true);
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            BufferedReader reader = null;
+                            try {
+                                serverHandler.sendEmptyMessage(STATE_CLIENT_CONNECTED);
+                                DataInputStream dataInputStream = new DataInputStream(client.getInputStream());
+                                //reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
+
+                                while (true) {
+
+
+//                                    if (val != -1) {
+//                                        Message message = createTextMessage(STATE_RECEIVED_MESSAGE, String.valueOf(val));
+//                                        serverHandler.sendMessage(message);
+//                                    }
+
+                                    byte b = dataInputStream.readByte();
+                                    if (b == 10) {
+                                        String line = dataInputStream.readUTF();
+
+                                        Message message = createTextMessage(STATE_RECEIVED_MESSAGE, line);
+                                        serverHandler.sendMessage(message);
+
+//                                    int val = reader.read();
+//                                    Message message = createTextMessage(STATE_RECEIVED_MESSAGE, String.valueOf(val));
+//                                    serverHandler.sendMessage(message);
+                                    }
+                                }
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            } finally {
+                                serverHandler.sendEmptyMessage(STATE_CLIENT_DISCONNECTED);
+                                if (reader != null) {
+                                    try {
+                                        reader.close();
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            }
+                        }
+                    }).start();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    if (serverSocket != null) {
+                        serverSocket.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        }
+    }
+
+    public class ClientWorker implements Handler.Callback {
+
+
+        //private PrintWriter writer;
+        private final InetAddress serverAddress;
+
+        private Socket socket;
+        private DataOutputStream dataOutputStream;
+
+
+        public ClientWorker(InetAddress serverAddress) {
+            this.serverAddress = serverAddress;
+        }
+
+        @Override
+        public boolean handleMessage(Message message) {
+            try {
+                switch (message.what) {
+                    case STATE_OPEN_SOCKET:
+                        socket = new Socket();
+                        socket.bind(null);
+                        socket.connect(new InetSocketAddress(serverAddress, PORT_SERVER));
+                        socket.setSoTimeout(10000);
+                        socket.setKeepAlive(true);
+                        dataOutputStream = new DataOutputStream(socket.getOutputStream());
+                        dataOutputStream.writeByte(1);
+                        break;
+
+                    case STATE_SEND_MESSAGE:
+                        String str = readStringFromMessage(message);
+
+                        dataOutputStream.writeByte(10);
+                        dataOutputStream.writeUTF(str);
+                        dataOutputStream.flush();
+                        break;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+//            } finally {
+//                try {
+//                    if (socket != null) {
+//                        socket.close();
+//                    }
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+
+            return true;
+        }
+
+
+    }
+
+    private static Message createTextMessage(int what, String text) {
+        Message message = new Message();
+        message.what = what;
+
+        Bundle bundle = new Bundle();
+        bundle.putString("msg", text);
+
+        message.setData(bundle);
+
+        return message;
+    }
+
+    private static String readStringFromMessage(Message message) {
+        return message.getData().getString("msg");
+    }
 }

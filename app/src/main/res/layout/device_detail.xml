@@ -32,6 +32,26 @@
                 android:layout_height="wrap_content"
                 android:text="@string/get_file_button"
                 android:visibility="gone" />
+            <Button
+                android:id="@+id/btn_client_send_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/send_message_button"
+                android:visibility="gone" />
+
+
+            <TextView
+                android:id="@+id/txt_server_received_messages"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Received messages: 0"
+                android:visibility="gone" />
+            <TextView
+                android:id="@+id/txt_server_client_connected"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Client connected"
+                android:visibility="visible" />
         </LinearLayout>
         <TextView
             android:id="@+id/device_address"
