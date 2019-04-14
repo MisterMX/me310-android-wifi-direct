@@ -1,6 +1,5 @@
-package com.example.android.wifidirect.connection;
+package com.example.android.wifidirect.connection.p2p;
 
-import android.app.IntentService;
 import android.app.Service;
 import android.content.Intent;
 import android.net.wifi.p2p.WifiP2pDevice;
@@ -8,7 +7,6 @@ import android.net.wifi.p2p.WifiP2pDeviceList;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
 import android.os.Message;
 import android.support.annotation.Nullable;
 

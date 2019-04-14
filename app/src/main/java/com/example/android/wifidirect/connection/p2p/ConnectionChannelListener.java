@@ -1,4 +1,4 @@
-package com.example.android.wifidirect.connection;
+package com.example.android.wifidirect.connection.p2p;
 
 import android.net.wifi.p2p.WifiP2pManager;
 

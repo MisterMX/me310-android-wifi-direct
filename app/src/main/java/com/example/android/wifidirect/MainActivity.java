@@ -7,7 +7,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.View;
 
-import com.example.android.wifidirect.connection.ConnectionManager;
+import com.example.android.wifidirect.connection.p2p.ConnectionManager;
 
 public class MainActivity extends AppCompatActivity {
     private ConnectionManager connectionManager;

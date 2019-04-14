@@ -19,7 +19,7 @@ import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.example.android.wifidirect.connection.ConnectionManager;
+import com.example.android.wifidirect.connection.p2p.ConnectionManager;
 
 import java.util.ArrayList;
 import java.util.List;

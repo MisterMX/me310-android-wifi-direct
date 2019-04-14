@@ -1,4 +1,4 @@
-package com.example.android.wifidirect.connection;
+package com.example.android.wifidirect.connection.p2p;
 
 import android.content.Context;
 import android.net.wifi.WpsInfo;
