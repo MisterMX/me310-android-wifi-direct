@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
+import android.net.wifi.p2p.WifiP2pInfo;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -43,6 +44,16 @@ public class ConnectionService extends Service {
 
 
                 }
+            }
+
+            @Override
+            public void onConnected(WifiP2pInfo wifiP2pInfo) {
+
+            }
+
+            @Override
+            public void onDisconnected() {
+
             }
         });
         manager.initialize();

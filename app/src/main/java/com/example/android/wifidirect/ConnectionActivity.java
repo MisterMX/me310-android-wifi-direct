@@ -11,6 +11,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,6 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ConnectionActivity extends AppCompatActivity {
+    private static final String TAG = ConnectionActivity.class.getName();
+
     private ConnectionManager manager;
     private ListView deviceListView;
 
@@ -91,13 +94,14 @@ public class ConnectionActivity extends AppCompatActivity {
         manager.connectTo(device, new ConnectionManager.ConnectingListener() {
             @Override
             public void onConnected(WifiP2pInfo wifiP2pInfo) {
+                Log.d(TAG, "Connected to P2P device.");
                 dialog.dismiss();
-                ConnectionActivity.this.getParent().setResult(Activity.RESULT_OK);
                 finish();
             }
 
             @Override
             public void onFailure(int errorCode) {
+                Log.e(TAG, String.format("Failed to connect to P2P device. Error %d", errorCode));
                 AlertDialog.Builder builder = new AlertDialog.Builder(ConnectionActivity.this);
                 builder.setMessage(String.format("Unable to connect. Error %d", errorCode));
                 builder.setPositiveButton("OK", null);
@@ -119,6 +123,18 @@ public class ConnectionActivity extends AppCompatActivity {
             deviceListView.setAdapter(new DeviceListAdapter(
                     ConnectionActivity.this,
                     new ArrayList<>(wifiP2pDeviceList.getDeviceList())));
+        }
+
+        @Override
+        public void onConnected(WifiP2pInfo wifiP2pInfo) {
+            if (!isFinishing()) {
+                finish();
+            }
+        }
+
+        @Override
+        public void onDisconnected() {
+
         }
     }
 

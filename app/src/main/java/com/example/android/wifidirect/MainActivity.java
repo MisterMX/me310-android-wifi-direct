@@ -1,27 +1,42 @@
 package com.example.android.wifidirect;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
+import android.net.wifi.p2p.WifiP2pInfo;
+import android.os.Build;
 import android.os.Bundle;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.AppCompatActivity;
-import android.view.Menu;
-import android.view.View;
 
 import com.example.android.wifidirect.connection.p2p.ConnectionManager;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity {
+    private static final int REQUEST_CODE_REQUIRE_PERMISSIONS = 1020;
+
     private ConnectionManager connectionManager;
 
     private ConnectedFragment connectedFragment;
-    private UnconnectedFragment unconnectedFragment;
+    private DisconnectedFragment disconnectedFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        connectedFragment = (ConnectedFragment)getSupportFragmentManager().findFragmentById(R.id.main_connected);
-        unconnectedFragment = (UnconnectedFragment)getSupportFragmentManager().findFragmentById(R.id.main_unconnected);
+        disconnectedFragment = (DisconnectedFragment) getSupportFragmentManager().findFragmentById(R.id.main_disconnected);
+        connectedFragment = (ConnectedFragment) getSupportFragmentManager().findFragmentById(R.id.main_connected);
+
+        requestPermissions(Manifest.permission.ACCESS_FINE_LOCATION);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
 
         connectionManager = new ConnectionManager(this, new ConnectionEventListener());
         connectionManager.initialize();
@@ -49,22 +64,39 @@ public class MainActivity extends AppCompatActivity {
         connectionManager.shutdown();
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_actions, menu);
-        return true;
-    }
-
     private void updateUi() {
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out);
+
         if (connectionManager.isConnected()) {
-            connectedFragment.getView().setVisibility(View.VISIBLE);
-            unconnectedFragment.getView().setVisibility(View.GONE);
+            transaction.show(connectedFragment);
+            transaction.hide(disconnectedFragment);
         } else {
-            connectedFragment.getView().setVisibility(View.GONE);
-            unconnectedFragment.getView().setVisibility(View.VISIBLE);
+            transaction.hide(connectedFragment);
+            transaction.show(disconnectedFragment);
         }
 
-        invalidateOptionsMenu();
+        transaction.commitAllowingStateLoss();
+
+        supportInvalidateOptionsMenu();
+    }
+
+    private void requestPermissions(String... permissions) {
+        List<String> requiredPermissions = new ArrayList<>();
+
+        for (String permission : permissions) {
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                requiredPermissions.add(permission);
+            }
+        }
+
+
+        if (!requiredPermissions.isEmpty()) {
+            String[] permissionsRequest = new String[requiredPermissions.size()];
+            permissionsRequest = requiredPermissions.toArray(permissionsRequest);
+
+            requestPermissions(permissionsRequest, REQUEST_CODE_REQUIRE_PERMISSIONS);
+        }
     }
 
     private class ConnectionEventListener implements ConnectionManager.EventListener {
@@ -76,7 +108,16 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onPeersAvailable(WifiP2pDeviceList wifiP2pDeviceList) {
+        }
 
+        @Override
+        public void onConnected(WifiP2pInfo wifiP2pInfo) {
+            updateUi();
+        }
+
+        @Override
+        public void onDisconnected() {
+            updateUi();
         }
     }
 }

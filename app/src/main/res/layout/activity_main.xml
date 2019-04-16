@@ -7,16 +7,16 @@
     tools:context="com.example.android.wifidirect.MainActivity">
 
     <fragment
+        android:id="@+id/main_disconnected"
+        class="com.example.android.wifidirect.DisconnectedFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <fragment
         android:id="@+id/main_connected"
         class="com.example.android.wifidirect.ConnectedFragment"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        />
-
-    <fragment
-        android:id="@+id/main_unconnected"
-        class="com.example.android.wifidirect.UnconnectedFragment"
-        android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
 
 </RelativeLayout>

@@ -7,17 +7,24 @@ import android.content.IntentFilter;
 import android.net.NetworkInfo;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
+import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
+import android.net.wifi.p2p.WifiP2pManager.Channel;
 import android.net.wifi.p2p.WifiP2pManager.ConnectionInfoListener;
 import android.net.wifi.p2p.WifiP2pManager.PeerListListener;
 
-class ConnectionBroadcastReceiver extends BroadcastReceiver implements PeerListListener, ConnectionInfoListener {
-    private WifiP2pManager manager;
-    private WifiP2pManager.Channel channel;
+class ConnectionBroadcastReceiver extends BroadcastReceiver implements PeerListListener, ConnectionInfoListener, WifiP2pManager.GroupInfoListener {
     private final WifiEventListener wifiEventListener;
 
-    public ConnectionBroadcastReceiver(WifiP2pManager manager, WifiP2pManager.Channel channel, WifiEventListener wifiEventListener) {
+    private WifiP2pManager manager;
+    private Channel channel;
+    private WifiP2pInfo connectionInfo;
+    private NetworkInfo networkInfo;
+    private WifiP2pGroup groupInfo;
+
+
+    public ConnectionBroadcastReceiver(WifiP2pManager manager, Channel channel, WifiEventListener wifiEventListener) {
         super();
         this.manager = manager;
         this.channel = channel;
@@ -43,7 +50,7 @@ class ConnectionBroadcastReceiver extends BroadcastReceiver implements PeerListL
                 break;
 
             case WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION:
-                NetworkInfo networkInfo = intent.getParcelableExtra(WifiP2pManager.EXTRA_NETWORK_INFO);
+                networkInfo = intent.getParcelableExtra(WifiP2pManager.EXTRA_NETWORK_INFO);
 
                 if (networkInfo.isConnected()) {
                     // we are connected with the other device, request connection
@@ -51,7 +58,7 @@ class ConnectionBroadcastReceiver extends BroadcastReceiver implements PeerListL
                     manager.requestConnectionInfo(channel, this);
                 } else {
                     // It's a disconnect
-                    wifiEventListener.onDisconnected();
+                    wifiEventListener.onDisconnected(networkInfo);
                 }
                 break;
 
@@ -69,7 +76,10 @@ class ConnectionBroadcastReceiver extends BroadcastReceiver implements PeerListL
 
     @Override
     public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
-        wifiEventListener.onConnected(wifiP2pInfo);
+        connectionInfo = wifiP2pInfo;
+        if (wifiP2pInfo.groupFormed) {
+            manager.requestGroupInfo(channel, this);
+        }
     }
 
     public IntentFilter getIntentFilter() {
@@ -82,13 +92,24 @@ class ConnectionBroadcastReceiver extends BroadcastReceiver implements PeerListL
         return intentFilter;
     }
 
+    @Override
+    public void onGroupInfoAvailable(WifiP2pGroup wifiP2pGroup) {
+        groupInfo = wifiP2pGroup;
+        wifiEventListener.onConnected(connectionInfo, wifiP2pGroup, networkInfo);
+    }
+
 
     public interface WifiEventListener {
         void onDeviceWifiDirectEnabled();
+
         void onDeviceWifiDirectDisabled();
+
         void onDeviceWifiDirectChanged(WifiP2pDevice wifiP2pDevice);
+
         void onPeersAvailable(WifiP2pDeviceList wifiP2pDeviceList);
-        void onConnected(WifiP2pInfo wifiP2pInfo);
-        void onDisconnected();
+
+        void onConnected(WifiP2pInfo wifiP2pInfo, WifiP2pGroup groupInfo, NetworkInfo networkInfo);
+
+        void onDisconnected(NetworkInfo networkInfo);
     }
 }
