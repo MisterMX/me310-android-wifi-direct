@@ -21,8 +21,10 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.example.android.wifidirect.connection.p2p.ConnectionManager;
+import com.example.android.wifidirect.connection.socket.ClientSocketConnection;
 import com.example.android.wifidirect.connection.socket.LocationMessage;
 import com.example.android.wifidirect.connection.socket.ServerSocketConnection;
+import com.example.android.wifidirect.connection.socket.SocketConnection;
 
 import java.io.IOException;
 
@@ -30,7 +32,7 @@ public class ConnectedFragment extends Fragment {
     private static final String TAG = ConnectedFragment.class.getName();
 
     private ConnectionManager connectionManager;
-    private ServerSocketConnection serverSocketConnection;
+    private SocketConnection socketConnection;
 
     private LocationManager locationManager;
     private LocationListener locationListener;
@@ -46,8 +48,6 @@ public class ConnectedFragment extends Fragment {
 
         locationManager = (LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE);
 
-
-        serverSocketConnection = new ServerSocketConnection();
         connectionManager = new ConnectionManager(getContext(), new ConnectionManager.EventListener() {
             @Override
             public void onDeviceWifiDirectChanged(WifiP2pDevice wifiP2pDevice) {
@@ -149,8 +149,11 @@ public class ConnectedFragment extends Fragment {
 
     private void onP2pConnected() {
         try {
-            serverSocketConnection.open();
-            serverSocketConnection.setReceiverAddresses(connectionManager.getDeviceAddresses());
+            socketConnection = connectionManager.getGroupInfo().isGroupOwner()
+                    ? new ServerSocketConnection()
+                    : new ClientSocketConnection(connectionManager.getConnectionInfo().groupOwnerAddress);
+
+            socketConnection.open();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -160,8 +163,8 @@ public class ConnectedFragment extends Fragment {
     }
 
     private void onP2pDisconnected() {
-        if (serverSocketConnection != null) {
-            serverSocketConnection.close();
+        if (socketConnection != null) {
+            socketConnection.close();
         }
 
         stopLocationListener();
@@ -200,10 +203,8 @@ public class ConnectedFragment extends Fragment {
     }
 
     private void onLocationChanged(Location location) {
-        try {
-            serverSocketConnection.sendMessage(new LocationMessage(deviceId, location.getLongitude(), location.getLatitude()));
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (socketConnection != null) {
+            socketConnection.sendMessage(new LocationMessage(deviceId, location.getLongitude(), location.getLatitude()));
         }
     }
 }

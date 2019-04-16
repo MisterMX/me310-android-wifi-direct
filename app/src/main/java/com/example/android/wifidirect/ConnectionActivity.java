@@ -119,7 +119,6 @@ public class ConnectionActivity extends AppCompatActivity {
 
         @Override
         public void onPeersAvailable(WifiP2pDeviceList wifiP2pDeviceList) {
-
             deviceListView.setAdapter(new DeviceListAdapter(
                     ConnectionActivity.this,
                     new ArrayList<>(wifiP2pDeviceList.getDeviceList())));

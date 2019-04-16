@@ -5,7 +5,6 @@ import android.content.pm.PackageManager;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
 import android.net.wifi.p2p.WifiP2pInfo;
-import android.os.Build;
 import android.os.Bundle;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.AppCompatActivity;
@@ -89,7 +88,6 @@ public class MainActivity extends AppCompatActivity {
                 requiredPermissions.add(permission);
             }
         }
-
 
         if (!requiredPermissions.isEmpty()) {
             String[] permissionsRequest = new String[requiredPermissions.size()];
