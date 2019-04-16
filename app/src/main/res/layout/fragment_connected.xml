@@ -5,6 +5,7 @@
     tools:context="com.example.android.wifidirect.ConnectedFragment">
 
     <com.example.android.wifidirect.SurroundingsScreen
+        android:id="@+id/main_connected_surrounding_screen"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

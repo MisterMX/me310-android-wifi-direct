@@ -31,11 +31,14 @@ import java.io.IOException;
 public class ConnectedFragment extends Fragment {
     private static final String TAG = ConnectedFragment.class.getName();
 
+    private SurroundingsScreen surroundingsScreen;
+
     private ConnectionManager connectionManager;
     private SocketConnection socketConnection;
 
     private LocationManager locationManager;
     private LocationListener locationListener;
+    private Location currentLocation;
 
     private String deviceId;
 
@@ -75,6 +78,7 @@ public class ConnectedFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_connected, container);
+        surroundingsScreen = view.findViewById(R.id.main_connected_surrounding_screen);
 
         return view;
     }
@@ -153,11 +157,16 @@ public class ConnectedFragment extends Fragment {
                     ? new ServerSocketConnection()
                     : new ClientSocketConnection(connectionManager.getConnectionInfo().groupOwnerAddress);
 
+            socketConnection.setEventListener(new SocketConnection.EventListener() {
+                @Override
+                public void onMessage(LocationMessage message) {
+                    onLocationMessageReceived(message);
+                }
+            });
             socketConnection.open();
         } catch (IOException e) {
             e.printStackTrace();
         }
-
 
         startLocationListener();
     }
@@ -203,8 +212,16 @@ public class ConnectedFragment extends Fragment {
     }
 
     private void onLocationChanged(Location location) {
+        currentLocation = location;
+
         if (socketConnection != null) {
             socketConnection.sendMessage(new LocationMessage(deviceId, location.getLongitude(), location.getLatitude()));
         }
+
+        surroundingsScreen.setThisDeviceLocation(location);
+    }
+
+    private void onLocationMessageReceived(LocationMessage message) {
+        surroundingsScreen.setOtherDeviceLocation(message.getDeviceId(), message.toLocation());
     }
 }
