@@ -25,12 +25,16 @@ public class ServerSocketConnection extends SocketConnection {
     @Override
     public void close() {
         if (serverSocketTask != null) {
+            //serverSocketTask.cancel(true);
+            serverSocketTask.forceCloseSocket();
             serverSocketTask.cancel(true);
+            serverSocketTask = null;
         }
     }
 
     private static class ServerSocketTask extends AsyncTask<Void, Object, Void> {
         private final ServerSocketConnection serverSocketConnection;
+        private ServerSocket serverSocket;
 
         ServerSocketTask(ServerSocketConnection serverSocketConnection) {
             this.serverSocketConnection = serverSocketConnection;
@@ -39,7 +43,7 @@ public class ServerSocketConnection extends SocketConnection {
         @Override
         protected Void doInBackground(Void... voids) {
             try {
-                ServerSocket serverSocket = new ServerSocket(PORT_LISTENER);
+                serverSocket = new ServerSocket(PORT_LISTENER);
 
                 while (!isCancelled()) {
                     Socket socket = serverSocket.accept();
@@ -78,6 +82,16 @@ public class ServerSocketConnection extends SocketConnection {
         @Override
         protected void onPostExecute(Void aVoid) {
             serverSocketConnection.onConnectionClosed();
+        }
+
+        public void forceCloseSocket() {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 }

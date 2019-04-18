@@ -27,6 +27,8 @@ import com.example.android.wifidirect.connection.socket.ServerSocketConnection;
 import com.example.android.wifidirect.connection.socket.SocketConnection;
 
 import java.io.IOException;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class ConnectedFragment extends Fragment {
     private static final String TAG = ConnectedFragment.class.getName();
@@ -39,6 +41,8 @@ public class ConnectedFragment extends Fragment {
     private LocationManager locationManager;
     private LocationListener locationListener;
     private Location currentLocation;
+
+    private Timer taskTimer;
 
     private String deviceId;
 
@@ -164,6 +168,10 @@ public class ConnectedFragment extends Fragment {
                 }
             });
             socketConnection.open();
+
+            taskTimer = new Timer();
+            SendLocationTask sendLocationTask = new SendLocationTask();
+            taskTimer.scheduleAtFixedRate(sendLocationTask, 0, 1000);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -174,6 +182,12 @@ public class ConnectedFragment extends Fragment {
     private void onP2pDisconnected() {
         if (socketConnection != null) {
             socketConnection.close();
+        }
+
+        if (taskTimer != null) {
+            taskTimer.cancel();
+            taskTimer.purge();
+            taskTimer = null;
         }
 
         stopLocationListener();
@@ -202,7 +216,7 @@ public class ConnectedFragment extends Fragment {
             }
         };
 
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 1f, locationListener);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 0.5f, locationListener);
     }
 
     private void stopLocationListener() {
@@ -212,16 +226,27 @@ public class ConnectedFragment extends Fragment {
     }
 
     private void onLocationChanged(Location location) {
+        Log.d(TAG, "Device location changed.");
         currentLocation = location;
-
-        if (socketConnection != null) {
-            socketConnection.sendMessage(new LocationMessage(deviceId, location.getLongitude(), location.getLatitude()));
-        }
-
         surroundingsScreen.setThisDeviceLocation(location);
+
+        sendLocation();
     }
 
     private void onLocationMessageReceived(LocationMessage message) {
         surroundingsScreen.setOtherDeviceLocation(message.getDeviceId(), message.toLocation());
+    }
+
+    private void sendLocation() {
+        if (socketConnection != null && currentLocation != null) {
+            socketConnection.sendMessage(new LocationMessage(deviceId, currentLocation.getLongitude(), currentLocation.getLatitude()));
+        }
+    }
+
+    private class SendLocationTask extends TimerTask {
+        @Override
+        public void run() {
+            sendLocation();
+        }
     }
 }
